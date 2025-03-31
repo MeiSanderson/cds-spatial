@@ -3,7 +3,7 @@ library(leaflet)
 library(mapboxapi)
 library(sf)
 
-token <- mytoken
+token <- "my token"
   # Read in the shelter data
 shelter <- readr::read_rds("../data/shelters.rds") 
 
