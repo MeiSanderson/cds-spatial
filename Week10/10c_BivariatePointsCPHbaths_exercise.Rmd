@@ -36,9 +36,9 @@ library(spatstat)
 
 ## Get data
 ```{r}
-baths_hist <- readRDS("../../cds-spatial/data/baths_hist.rds") # historical baths
-baths_cph <- readRDS("../../cds-spatial/data/baths_cph.rds")  # baths by suburb centroids 
-baths_osm <- readRDS("../../cds-spatial/data/baths_osm.rds") # OSM baths
+baths_hist <- readRDS("../data/baths_hist.rds") # historical baths
+#baths_cph <- readRDS("../data/baths_cph.rds")  # baths by suburb centroids 
+baths_osm <- readRDS("../data/baths_osm.rds") # OSM baths
 ```
 
 Let's rerun one of the last visualisations (of historical bathouses and modern OSM bathhouses)  in the synced map so we can compare the locations with OSM data.
