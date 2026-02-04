@@ -7,8 +7,17 @@
 
 # Packages
 install.packages("leaflet")
-install.packages("htmltools") 
+install.packages("htmltools")
 install.packages("googlesheets4")
+pak::pak("tidyverse/googlesheets4")
+
+library(pacman)
+library(pak)
+
+pacman::p_load(tidyverse,
+               htmltools,
+               leaflet,
+               googlesheets4)
 
 # Example with Markers
 library(leaflet)
@@ -100,8 +109,41 @@ saveWidget(AUSmap, "AUSmap.html", selfcontained = TRUE)
 #
 # Task 1: Create a Danish equivalent with esri layers, call it DKmap
 #
+
+l_DK <- leaflet() %>%   # assign the base location to an object
+  setView(11.764437447, 56, zoom = 13)
+
+esri <- grep("^Esri", providers, value = TRUE)
+
+for (provider in esri) {
+  l_DK <- l_DK %>% addProviderTiles(provider, group = provider)
+}
+
+DKmap <- l_DK %>%
+  addLayersControl(baseGroups = names(esri),
+                   options = layersControlOptions(collapsed = FALSE)) %>%
+  addMiniMap(tiles = esri[[1]], toggleDisplay = TRUE,
+             position = "bottomright") %>%
+  addMeasure(
+    position = "bottomleft",
+    primaryLengthUnit = "meters",
+    primaryAreaUnit = "sqmeters",
+    activeColor = "#3D535D",
+    completedColor = "#7D4479") %>% 
+  htmlwidgets::onRender("
+                        function(el, x) {
+                        var myMap = this;
+                        myMap.on('baselayerchange',
+                        function (e) {
+                        myMap.minimap.changeLayer(L.tileLayer.provider(e.name));
+                        })
+                        }") %>% 
+  addControl("", position = "topright")
+
+
+
 # Task 2: Start collecting spatial data into a spreadsheet: https://docs.google.com/spreadsheets/d/1PlxsPElZML8LZKyXbqdAYeQCDIvDps2McZx1cTVWSzI/edit#gid=1817942479
-#
+# YAY
 #
 ################################## ADD DATA TO LEAFLET
 # Libraries
@@ -109,11 +151,11 @@ library(tidyverse)
 library(googlesheets4)
 library(leaflet)
 
-# gs4_deauth() # if the authentication is not working for you
+gs4_deauth() # if the authentication is not working for you
 
 places <- read_sheet("https://docs.google.com/spreadsheets/d/1PlxsPElZML8LZKyXbqdAYeQCDIvDps2McZx1cTVWSzI/edit#gid=1817942479",
-                     range = "SA2025",
-                     col_types = "cccnncnc")
+                     range = "SA2026", #the tap
+                     col_types = "cccnncnc") # c = character; n = numeric; d = date
 glimpse(places)
 
 leaflet() %>% 
@@ -128,4 +170,36 @@ leaflet() %>%
 # The googlesheet is at https://docs.google.com/spreadsheets/d/1PlxsPElZML8LZKyXbqdAYeQCDIvDps2McZx1cTVWSzI/edit#gid=1817942479
 
 #########################################################
+
+
+l_DK <- leaflet() %>%   # assign the base location to an object
+  setView(11.764437447, 56, zoom = 13) %>%
+  addMarkers(lng = places$Longitude, lat = places$Latitude, popup = places$Description)
+
+esri <- grep("^Esri", providers, value = TRUE)
+
+for (provider in esri) {
+  l_DK <- l_DK %>% addProviderTiles(provider, group = provider)
+}
+
+DKmap <- l_DK %>%
+  addLayersControl(baseGroups = names(esri),
+                   options = layersControlOptions(collapsed = FALSE)) %>%
+  addMiniMap(tiles = esri[[1]], toggleDisplay = TRUE,
+             position = "bottomright") %>%
+  addMeasure(
+    position = "bottomleft",
+    primaryLengthUnit = "meters",
+    primaryAreaUnit = "sqmeters",
+    activeColor = "#3D535D",
+    completedColor = "#7D4479") %>% 
+  htmlwidgets::onRender("
+                        function(el, x) {
+                        var myMap = this;
+                        myMap.on('baselayerchange',
+                        function (e) {
+                        myMap.minimap.changeLayer(L.tileLayer.provider(e.name));
+                        })
+                        }") %>% 
+  addControl("", position = "topright")
 
