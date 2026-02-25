@@ -8,10 +8,22 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-library(knitr)
-library(rmdformats)
-library(tidyverse)
-library(sf)
+
+pacman::p_load(tidyverse,
+               pastecs,
+               WRS2,
+               readr,
+               interactions,
+               lme4,
+               dplyr,
+               rmdformats,
+               knitr,
+               ggplot2,
+               sf,
+               tmap)
+
+devtools::install_github("r-spatial/mapview@develop")
+pacman::p_load(mapview)
 
 ## Global options
 options(max.print="75")
@@ -23,6 +35,7 @@ opts_chunk$set(echo=TRUE,
                message=FALSE,
                warning=FALSE)
 opts_knit$set(width=75)
+
 ```
 
 # Task 1: Danish monuments
@@ -39,7 +52,7 @@ In this task, you will find out which municipality in Denmark has the most Vikin
 ```{r monuments-dk, eval=FALSE}
 
 # Load the anlaeg_all_25832 monuments into R
-monuments <- read_sf("_______")
+monuments <- read_sf("../data/Sciencedata/anlaeg_all_25832.shp")
 
 # Check the periodisation and type of the monuments
 unique(monuments$datering)
@@ -47,18 +60,18 @@ unique(monuments$anlaegsbet)
 
 # Filter Viking-era finds
 viking <- monuments %>% 
-  filter( ______________)
+  filter(datering == "Vikingetid")
 
-viking
+head(viking)
 
 # Load municipalities either from data/ or via geodata library > gadm
-mun <- read_rds("../data/gadm36_DNK_2_sp.rds")
+mun <- read_rds("../data/Sciencedata/gadm36_DNK_2_sp.rds") # large spatial dataframe, not a simple feature, so st_ functions don't yet work
 
 # Check that the municipalities are a simple feature and in UTM 32N
 
 mun_25832 <- mun %>% 
-  __________() %>% 
-  __________(25832)
+  st_as_sf() %>% # other times use st_as_sf() or st_sf()
+  st_transform(25832)
 
 
 # Plot the monuments on top of the municipalities
@@ -87,19 +100,19 @@ Importantly, the `st_join()` function requires `sf` data frames as input and wil
 class(viking)
 
 # Join the viking monuments with the municipalities
-viking <-  _____(____,_____)
+viking_joined <-  st_join(viking, mun_25832)
 
 # Confirm that viking_neigh has the municipality information
-head(viking)
+head(viking_joined)
 
 # Calculate the count of monuments per municipality
-viking %>% 
+viking_joined %>% 
   group_by(NAME_2) %>% 
   tally() %>% 
   arrange(desc(n)) 
 
 # Create an object with 5 of the least populated municipalities
-least <- viking %>% 
+least <- viking_joined %>% 
   group_by(NAME_2) %>% 
   tally() %>% 
   arrange(n) %>%
@@ -108,7 +121,9 @@ least
   
 # Plot the municipalities with fewest Viking finds in red over DK municipalities
 plot(mun_25832$geometry, col = "grey", border = "white")
-plot(st_geometry(_________________, col = "red", add = T) 
+plot(st_geometry(mun_25832 %>% dplyr::filter(NAME_2 %in% least$NAME_2)), col = "red", add = T)# plot the kommuner where the NAME2 is one of the names in the five least viking populated kommuner
+
+# plot(st_geometry(mun_25832 %>% st_filter(least, join = "st_intersects"), col = "red", add = T) # same thing as above but with SPATIAL filter
 
 ```
 
@@ -117,40 +132,43 @@ Great! The monuments object did not have municipality information until you perf
 
 ### Couple more questions:
 
-* What is the density of monuments (anlaeg) per sq km in each municipality?
+* What is the density of monuments (anlaeg) per sq km in each municipality? (create new column)
 * Which municipalities have no record of Viking monuments (`NA`)? 
 * What is the density of monuments in areas that have no record of Viking monuments?
 
 ```{r eval = FALSE}
+
 # Calculate densities of monuments and Viking finds per municipality;
 # discard geometries before generating the summaries
 
 m_summary <- monuments %>%
   st_join(mun_25832) %>% 
-  ________() %>% 
-  group_by(_____) %>% 
+  st_drop_geometry() %>% # discard geometry as it is not needed for the summary and it takes up space; thus not needed
+  group_by(NAME_2) %>% 
   tally()%>% 
   rename(monuments = n)
 
-v_summary <- viking %>%
+v_summary <- viking_joined %>%
   st_drop_geometry() %>% 
-  group_by(______) %>% 
+  group_by(NAME_2) %>% 
   tally()%>% 
-  rename(viking = n)
+  rename(viking_joined = n)
 
+# NAME_2 = kommune name
 
 # Join the summaries to the municipalities data and calculate density per 1 km square
 mun_25832 <- mun_25832 %>% 
-  left_join(________, by = "NAME_2")  %>% 
-  mutate(density = monuments / (st_area(.)/________)) %>% # density per 1km square
-  left_join(______, by = "NAME_2")  %>% 
-  mutate(v_density = viking / (st_area(.)/__________)) 
+  left_join(m_summary, by = "NAME_2")  %>% 
+  mutate(density = monuments / (st_area(.)/1000000)) %>% # density per 1km square
+  left_join(v_summary, by = "NAME_2")  %>% 
+  mutate(v_density = viking_joined / (st_area(.)/1000000))  # division to go from meters to km^2
 
 
 # Visualize the density of finds vis-a-vis the municipalities with 'NA' viking finds
 mun_25832 %>%
-  mapview(zcol = "density") + 
-  mapview(_________, col.regions = "red")
+  mapview::mapview(zcol = "density") + # + another later
+  mapview::mapview(filter(is.na(v_density)), col.regions = "red")
+
 
 ```
 
@@ -170,13 +188,17 @@ Beginning with centroids, centroid calculations should generally be performed on
 * Can you vary the size of centroids by the number of Viking finds contained by the municipality/or by their density?
 
 ```{r mun-centroids, eval = FALSE}
-centroids <- _________(mun_25832)
+
+library(mapview)
+
+centroids <- st_centroid(mun_25832)
 
 mapview(mun_25832, col.regions = "beige", legend = FALSE) + 
-  mapview(______,_________,_______)
+  mapview(centroids, cex = "v_density", zcol = "v_density") # zcol for colour
 
 mapview(mun_25832, col.regions = "beige", legend = FALSE) + 
-  mapview(______,_________,_______)
+  mapview(centroids, cex = "density", zcol = "v_density")
+
 ```
 
 # Task 4: Computing bounding boxes
@@ -196,28 +218,30 @@ In the `sf` package, there is a function for extracting the bounding box coordin
 * Create a plot of the `municipalities`, highlighting the Aarhus municipality and `aarhus_box` (just the geometry), the new box on top of it with `a_viking` points on top.
 
 ```{r Ar-box, eval= FALSE}
+
 # Filter Aarhus [or another municipality] out of the municipalities 
 aarhus_mun <- mun_25832 %>% 
   filter(NAME_2 == "Århus")
 
 # Filter out also the viking finds in Aarhus
-a_viking <- viking %>% 
+a_viking <- viking_joined %>% 
   filter(NAME_2 == "Århus")
 
 # Plot the Aarhus municipality and the local viking finds
 plot(st_geometry(aarhus_mun), col = "grey", border = "white")
-plot(_______________, add = TRUE, pch = 16, col = "forestgreen")
+plot(st_geometry(a_viking), add = TRUE, pch = 16, col = "forestgreen")
 
 # Check the coordinates of the Aarhus bounding box
 st_bbox(aarhus_mun)
 
 # Compute a bounding box polygon
-aarhus_box <- _________(aarhus_mun, _______)
+aarhus_box <- st_make_grid(aarhus_mun, n=1) # n = one grid
 
 # Plot all the DK municipalities, add the shelters and the new box outlining the Aarhus municipality
 plot(st_geometry(mun_25832), col = "grey", border = "white")
-plot(a_viking$geometry, pch = 16, col = "forestgreen", ______)
-plot(aarhus_box, _____,_____)
+plot(a_viking$geometry, pch = 16, col = "forestgreen", add = TRUE)
+plot(aarhus_box, lwd = 2, add = TRUE)
+
 ```
 Bounding box completed! You can see in the plot that the bounding box is the minimum rectangular polygon that fits all the monuments. You might now clip a series of layers to this box for a consistent extent over the Aarhus municipality. 
 
@@ -255,21 +279,41 @@ bb <- districts %>%
   st_make_grid(n =1)
 mapview(bb) + mapview(shelters)
 
+# ABOVE:   MYSTERY FILE - i don't have, but should be fine without it for now
+
+```
+
+
+```{r}
+
+# MY HOME IS TOO FAR AWAY SADLY
+
 # Load shelters
-shelters <- read_sf("../data/sheltersAarhus.geojson")
+shelters <- read_sf("../data/Sciencedata/sheltersAarhus.geojson")
 
 # Create your address as a dataframe with lat long data, following this pattern:
-df <- data.frame(place = c("Aarhus Domkirke", 
-                           "Christianskirken",
+df <- data.frame(place = c("Hjem",
                            "Nobelparken"),
-                 longitude=c(10.2102364,10.1949197,10.2033485),
-                 latitude=c(56.1574919,56.1772228,56.174346))
+                 longitude=c(10.119365154267602,10.2033485),
+                 latitude=c(56.19207363584575,56.174346))
+
+df <- df %>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% # same as WGS 84????
+  st_transform(4326)
 
 # Compute a buffer around your address
+df_buf <- st_buffer(df, dist = 300)
+
+mapview(df_buf)
+
+mapview(shelters) + mapview(df_buf)
+
 
 
 # Calculate which shelters fall within the buffer or bounding box of your place
+my_shelters <- st_intersection(shelters, df_buf)
 
+mapview(my_shelters) + mapview(df_buf)
 
 # Visualize your buffer and bounding box with intersecting shelters
 
@@ -291,14 +335,14 @@ One such approach here is to aggregate points into small aggregates - a hexagon 
 * Visualize the now consistently depicted densities and compare to point distribution
 
 ```{r}
-# Clip monuments by Aarhus boundary
+
+# Clip (filter) monuments by Aarhus boundary
 a_mon <- monuments %>% 
   st_intersection(aarhus_mun$geometry) 
 a_mon %>% 
   mapview(zcol = "datering")
 
 # Create a grid of squares and of hexagons over Aarhus municipality 
-
 grid_500 <- st_make_grid(aarhus_mun, cellsize = 500, square = TRUE) %>% 
   st_intersection(aarhus_mun) %>% st_sf() %>% 
   mutate(cell_id = row_number())
@@ -332,6 +376,8 @@ mapview(hex_counts,
         alpha = 0.5) + 
   mapview(a_mon, zcol = "datering", cex = 0.5)
 
+
+# possibly better to use another classification interval instead of this one with equal intervals
 
 
 ```
