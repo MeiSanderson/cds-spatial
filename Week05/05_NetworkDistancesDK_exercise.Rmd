@@ -65,7 +65,7 @@ All features in mapboxapi require a valid Mapbox access token to work. Now that 
 
 ```{r mapbox-auth, eval = FALSE}
 # either paste it in directly, or in a txt file that you store locally and "ignore"
-my_token <- "pk.eyJ1IjoibWVpLXNhbmRlcnNvbiIsImEiOiJjbW1ieGFsbTUwMGVtMnBxd2F5Mzc5aTA5In0.upzLj_8JPj698LPKsVPEYw" ## IF sharing; like on GitHub -> DO THE BELOW (save and loaded as .txt file in _gitignore_), so that the token is shared with others
+my_token <- _find online and insert again_ ## IF sharing; like on GitHub -> DO THE BELOW (save and loaded as .txt file in _gitignore_), so that the token is shared with others
 # my_token <- read_file("mytoken.txt")
 
 library(mapboxapi)
