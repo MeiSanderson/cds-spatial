@@ -481,7 +481,7 @@ leaflet() %>%
 Well, the list is not perfect in all instances. Sometimes it gets the hospital , other times it places a marker in the middle of a town. If you want to fix it, provide street addresses and re-geocode.
 ```{r h-map, echo = FALSE}
 
-h <- readRDS("../data/Sciencedata/hospitals.rds")
+# h <- readRDS("../data/Sciencedata/hospitals.rds") # better using direct adresses
 
 leaflet() %>% 
   addTiles() %>% 
@@ -503,28 +503,36 @@ h_sf <- st_as_sf(h[-17,], coords = c("oc_lng", "oc_lat"), crs = 4326) #%>%
 # Walking range 20 mins
 walking_isos <- mb_isochrone(
   h_sf,
-  profile = ________,
-  time = _______,
+  profile = "walking",
+  time = c(20),
   id = "placename"
 )
 
 # Cycling range
 cycling_isos <- mb_isochrone(
-  ____
-  )
+  h_sf,
+  profile = "cycling",
+  time = c(20),
+  id = "placename"
+)
 
 # Driving range
 driving_isos <- mb_isochrone(
-  _____
+  h_sf,
+  profile = "driving",
+  time = c(20),
+  id = "placename"
 )
+
 ```
 
 ### Plot the accessibility of Midtjylland hospitals
 These results can be visualized on our Mapbox map:
 
 ```{r map-isos, eval = FALSE}
-mapbox_map %>%
-  ________
+
+mapbox_map %>% addPolygons(data = driving_isos, color = "yellow") %>% addPolygons(data = cycling_isos, color = "orange") %>% addPolygons(data = walking_isos, color = "red")
+
 
 ```
 
@@ -538,3 +546,48 @@ Well done! Now you can see the reachable area within a 20-minute walk, 20-minute
 *1. Which areas are not covered by 20-min drive or 20-min bikeride? How big is their total area?*
 
 *2. How much do you need to increase the driving range so that everyone in Midtjylland can access a hospital (let's assume everyone has a car and just want to inform them of how long it will take)?*
+
+
+
+
+## ASSIGNMENT WORK
+```{r kommune and hospitals, eval = FALSE}
+
+# st_union = to work with a big object/polygon; important to use
+# st_intersection = to get intersection between areas-not-25%-away-from-hospital and municipalities
+
+
+# FUTURE -> incl. ambulance "stations"; incl. visualisations of the % of no-car in these areas
+# mapbox API doesn't include traffic
+
+
+
+# IDEA
+# hospitals -> isochrome -> st_union -> ***
+
+```
+
+
+```{r next, eval = FALSE}
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
