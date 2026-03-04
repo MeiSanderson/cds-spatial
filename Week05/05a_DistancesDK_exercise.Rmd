@@ -8,8 +8,11 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-library(knitr)
-library(rmdformats)
+
+pacman::p_load(knitr,
+               bookdown,
+               rmdformats,
+               geosphere)
 
 ## Global options
 options(max.print="75")
@@ -102,6 +105,16 @@ Let us now generate Euclidean distances for the Aarhus to Sydney route, and comp
 * Convert the `points` df into a simple feature and project to 2D space. You can try either the Danish UTM or Australian GDA EPSG. 
 * Calculate Euclidean distance with `st_distance()`, supplying the two rows of `points` as origin and distance arguments. 
 * *What is the difference in the Euclidean and geodetic distance on the route Aarhus to Sydney?*
+
+```{r, eval =FALSE}
+
+# figuring our the long and lat
+print(my_points)
+print(my_points[2]  )
+
+```
+
+
 ```{r points, eval =FALSE}
 # load libraries
 library(sf)
@@ -109,28 +122,33 @@ library(tidyverse)
 
 # prepare data as a simple feature
 points <- data.frame(names =c("Aarhus University", "Sydney Opera"), 
-                        longitude = c(________,_________),
-                        latitude = c(________,_________))
+                        longitude = c(my_points[1], my_points[2]),
+                        latitude = c(my_points[3], my_points[4]))
 
-# create geographic simple feature
+# create geographic simple feature # 3D
 points_4326 <- points %>% 
-  ________(coords = c("longitude", "latitude"), crs = ________) 
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
-# create a planimetric simple feature
+# create a planimetric simple feature # 2D
 points_32632 <- points %>% 
-  ________(coords = c("longitude", "latitude"), crs = ________) %>% 
-  st_transform(________)
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% 
+  st_transform(32632)
+
+# OR
+#points_32632 <- points %>% points_4326 %>% st_transform(32632)
+
 
 
 # calculate the Euclidean distance
-euc_dist <- st_distance(________[1,],________[2,])
+euc_dist <- st_distance(points_32632[1,],points_32632[2,])
 
 # calculate geodetic distance
-geo_dist <- st_distance(________[1,],________[2,])
+geo_dist <- st_distance(points_4326[1,],points_4326[2,])
 
 # difference
 euc_dist-geo_dist 
-(eu_dist-geo_dist)/geo_dist*100  
+(euc_dist-geo_dist)/geo_dist*100  
+
 ```
 
 
