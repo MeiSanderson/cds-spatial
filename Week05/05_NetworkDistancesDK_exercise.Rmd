@@ -429,7 +429,7 @@ library(tidyverse)
 help(oc_config)
 
 # set key in the environment
-my_opencage_key = "8298a49c3afb4fe49a2771cc1e2e7c4d"
+my_opencage_key = _find online and insert again_
 Sys.setenv(OPENCAGE_KEY = my_opencage_key)
 
 # OR
