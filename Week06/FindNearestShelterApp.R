@@ -1,11 +1,16 @@
-library(shiny)
-library(leaflet)
-library(mapboxapi)
-library(sf)
 
-token <- "my token"
+library(pacman)
+
+pacman::p_load(shiny,
+               leaflet,
+               mapboxapi,
+               sf)
+
+
+token <- "pk.eyJ1IjoibWVpLXNhbmRlcnNvbiIsImEiOiJjbW1ieGFsbTUwMGVtMnBxd2F5Mzc5aTA5In0.upzLj_8JPj698LPKsVPEYw"
+
 # Read in the shelter data
-shelter <- readr::read_rds("../data/shelters.rds") 
+shelter <- readr::read_rds("../data/Sciencedata/shelters.rds") 
 
 st_crs(shelter) <- 4326
 
