@@ -7,7 +7,7 @@ pacman::p_load(shiny,
                sf)
 
 
-token <- "pk.eyJ1IjoibWVpLXNhbmRlcnNvbiIsImEiOiJjbW1ieGFsbTUwMGVtMnBxd2F5Mzc5aTA5In0.upzLj_8JPj698LPKsVPEYw"
+token <- _find on MapBoxAPI_
 
 # Read in the shelter data
 shelter <- readr::read_rds("../data/Sciencedata/shelters.rds") 
