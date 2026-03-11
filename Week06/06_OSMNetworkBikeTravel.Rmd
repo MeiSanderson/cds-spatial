@@ -8,8 +8,8 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-library(knitr)
-library(rmdformats)
+#library(knitr)
+#library(rmdformats)
 
 ## Global options
 options(max.print="75")
@@ -26,15 +26,21 @@ opts_knit$set(width=75)
 This script is based on Luuk van der Meer's presention from UseR2024 in Salzburg, travel along a network. https://luukvdmeer.github.io/UseR2024/notebook.html
 
 ```{r load_libraries}
-library(sfnetworks)
-library(sf)
-library(tidygraph)
-library(tidyverse)
-library(osmdata)
-library(slopes)
-library(raster)
-library(units)
-library(mapview)
+
+library(pacman)
+
+pacman::p_load(rmdformats, sfnetworks,
+               sf,
+               tidygraph,
+               tidyverse,
+               osmdata,
+               raster,
+               units,
+               mapview)
+
+pacman::p_load(slopes)
+
+
 ```
 
 # 1. Get OpenStreetMap data
@@ -49,6 +55,9 @@ mapview(area)
 Now we query all streets within our area of interest from OpenStreetMap. In OpenStreetMap, streets are those features that have a value for the highway key. In R, they will be represented by an sf data frame with linestring geometries. Since some streets may be drawn as a closed polygon (like a square or a roundabout) we convert polygon borders into linestrings, before extracting only the linestrings from the API response. Finally, we cut streets at the edge of our area of interest and make sure all of them are single linestrings, meaning that the different parts of multi-linestrings will be seen as different street segments (note that to do this properly we first need to cast everything to multi-linestrings).
 
 ```{r query_osm_streets, eval = FALSE}
+
+assign("has_internet_via_proxy", TRUE, environment(curl::has_internet)) # telling R that we do in fact have wifi
+
 streets <- osmdata::opq(sf::st_bbox(area)) %>%
   osmdata::add_osm_feature(key = "highway") %>%
   osmdata::osmdata_sf() %>%
@@ -61,10 +70,12 @@ streets <- osmdata::opq(sf::st_bbox(area)) %>%
 ```
 
 ```{r load-streets, echo = FALSE}
-# saveRDS(streets, "../data/DGB_streets_osm.rds")
-streets <- readRDS("../data/DGB_streets_osm.rds")
+
+# saveRDS(streets, "../data/Sciencedata/DGB_streets_osm.rds")
+streets <- readRDS("../data/Sciencedata/DGB_streets_osm.rds")
 streets <- streets %>% 
   dplyr::select(osm_id, highway)
+
 ```
 
 
@@ -100,6 +111,8 @@ plot(sf::st_geometry(BDG %>%st_intersection(area)), col = "orange", pch = 20, ce
 In this step, we estimate cycling travel times for each street segment. These are computed (obviously) as length / speed. First, we compute the length in kilometers of the street segments.
 
 ```{r calculate_street_lengths}
+streets <- streets %>% select(osm_id, name, surface) # simply to work with less data at the moment
+  
 streets$length <-sf::st_length(streets) %>%
   units::set_units("km")
 
@@ -109,7 +122,7 @@ plot(dplyr::select(streets, length))
 For the cycling speed, we define a default speed which we adjust based on the gradient of the street segment. To do so, we first need to estimate the gradient of each street segment. This requires a Digital Elevation Model (DEM), which basically is a spatial grid covering an area and storing an elevation value for each cell. We use a DEM for Denmark with a 10m resolution, available as open data from the dataforsyning in EPSG 4326. You still need to crop the full version of it in the data folder of this repository, which we load with the raster package. To estimate gradients of linestrings with this DEM, we use the `slopes` package. We use anisotropic / directed travel.
 
 ```{r estimate_street_gradients}
-dem <- raster("../data/DNK_msk_alt.grd") 
+dem <- raster("../data/Sciencedata/DNK_msk_alt.grd") 
 dem <- crop(dem, st_bbox(area))
 gradients <- slopes::slope_raster(streets, dem, directed = TRUE) * 100
 
@@ -118,6 +131,8 @@ gradients <- slopes::slope_raster(streets, dem, directed = TRUE) * 100
 Now we can set a speed of each street segment, based on its gradient. We use a default speed of 20 km/h. An uphill gradient decreases this speed, and a downhill gradient increases this speed, all until a given minimum and maximum speed of respectively 5 km/h and 30 km/h. For reasons of simplicity, we will just model a linear relation between gradient and speed, adapted from Parkin & Rotheram (2010).
 
 ```{r calculate_cycling_times}
+
+# choose the parameters you want. now max speed is 30 and min speed is 20
 estimate_speed <-function(gradient, default = 20, max = 30, min = 5) {
   ifelse(  # is gradient less than 0? if yes go to downhill, if no uphill
     gradient < 0, 
@@ -148,6 +163,9 @@ plot(dplyr::select(streets, time))
 In this step, we convert the street centerlines into a routable network structure. This basically means that we make it explicit which street segments share an endpoint, such that we know how streets are connected, and hence, how someone can travel from A to B. This can be done very easily with the `sfnetworks` package. Note that for now we simply assume each street can be traveled in both directions, and the network is therefore undirected.
 
 ```{r create_routable_network}
+
+# just streets above, no we make a network (e.g., with connections; a vertex when streets cross)
+
 network <-sfnetworks::as_sfnetwork(streets, directed = FALSE)
 
 par(mar = c(0, 0, 0, 0))
@@ -157,7 +175,7 @@ plot(network, cex = 0.5)
 However, streets in OpenStreetMap are not always mapped with a network structure in mind. It happens often that connected street segments cross each other without sharing an endpoint. This results in many disconnected sets of streets in the network, as shown below. Even our small network has over 5000 disconnected components, with the largest of them containing around 20% of all nodes.
 
 ```{r count_network_components}
-tidygraph::with_graph(network, tidygraph::graph_component_count())
+tidygraph::with_graph(network, tidygraph::graph_component_count()) # disconnected sets of streets (incl. working paths)
 ```
 
 ```{r analyze_network_connectivity}
@@ -168,7 +186,7 @@ node_count_largest <-network %>%
   tidygraph::convert(tidygraph::to_largest_component) %>%
   tidygraph::with_graph(tidygraph::graph_order())
 
-round(node_count_largest / node_count_all * 100)
+round(node_count_largest / node_count_all * 100) # % of nodes within the biggest subdivision (?)
 ```
 
 Luckily, the `sfnetworks` package contains functions to pre-process and clean networks. One of them is `to_spatial_subdivision()`, which connects streets when they share internal vertices rather than only endpoints. This results in a network that still has some disconnected components (which is to be expected since we cut the network at the buffer boundaries), but with the largest of them containing almost all nodes.
@@ -239,11 +257,12 @@ plot(BDG|>st_intersection(area), add =TRUE)
 
 ```
 
+
 ```{r compute_accessibility_to_shelters}
 times <-valid_network %>%
-  sfnetworks::st_network_cost(venue, BDG|>st_intersection(area), weights = "time")
+  sfnetworks::st_network_cost(venue, BDG|>st_intersection(area), weights = "time") # cost network (cost = time); how many BDG can we get to
 
-access <- BDG[which(times < units::set_units(6, "min")), ]
+access <- BDG[which(times < units::set_units(6, "min")), ] # how many BDG (shelters) can we get to within 6 min biking
 
 nrow(access)
 
@@ -282,7 +301,7 @@ path <- st_network_paths(
 route_edges <- valid_network %>%
   activate("edges") %>%
   slice(path$edge_paths[[1]]) %>%
-  st_as_sf()
+  st_as_sf() # convert into simple feature
 
 # Inspect the route
   mapview::mapview(route_edges, color = "red", lwd = 4) +
