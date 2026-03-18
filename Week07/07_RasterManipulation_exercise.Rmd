@@ -8,8 +8,17 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-library(knitr)
-library(rmdformats)
+
+pacman::p_load(knitr,
+               bookdown,
+               rmdformats,
+               geosphere,
+               opencage,
+               mapboxapi,
+               leaflet,
+               terra,
+               viridis,
+               tidyverse)
 
 ## Global options
 options(max.print="75")

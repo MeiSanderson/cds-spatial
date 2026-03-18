@@ -8,8 +8,23 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-library(knitr)
-library(rmdformats)
+
+pacman::p_load(knitr,
+               bookdown,
+               rmdformats,
+               geosphere,
+               opencage,
+               mapboxapi,
+               leaflet,
+               terra,
+               viridis,
+               tidyverse,
+               geodata,
+               raster,
+               sfarrow,
+               leaflet,
+               mapview)
+
 
 ## Global options
 options(max.print="75")
@@ -60,13 +75,27 @@ Raster data can be very big depending on the extent and resolution (grid cell si
 
 ```{r access-raster, echo=TRUE, eval=FALSE}
 # libraries
-library(terra)
-library(geodata)
-library(tidyverse)
+pacman::p_load(knitr,
+               bookdown,
+               rmdformats,
+               geosphere,
+               opencage,
+               mapboxapi,
+               leaflet,
+               terra,
+               viridis,
+               tidyverse,
+               geodata)
+
 
 # Read in the elevation layer (centered on Aarhus)
-elevation <- elevation_3s(_______,_________, 
-                           path = "____")
+elevation <- elevation_3s(lon=10.2, lat=56.15, z=9, 
+                           path = ".")
+
+elevation <- terra::rast("elevation/srtm_39_01.tif") # simply to not have to load the above everytime
+
+?elevation_3s
+
 
 # Check if the data is in memory
 inMemory(elevation)
@@ -79,6 +108,8 @@ vals <- values(elevation)
 
 # Use hist() to create a histogram of the values
 hist(vals)
+
+
 ```
 
 You now know that the `terra` package only reads in raster values as needed to save space in memory. You can get the values manually using the `values()` function.
@@ -105,19 +136,33 @@ On some OSs, `terra` package does not support `sf` objects. This should not happ
 library(sf)
 library(geodata)
 
+
+# get municipalities
+muns <- readRDS("../data/Sciencedata/gadm36_DNK_2_sp.rds") %>% 
+  st_as_sf()
+
+
 # Load municipality and transform to match elevation CRS if needed
-aarhus <- _________(_________________) %>% 
-  st_as_sf() %>% # convert to sf?
-  ________    # pluck out Aarhus
+aarhus <- muns %>% # convert to sf; simpleFeatureObj
+  slice(31)    # pluck out Aarhus       muns$NAME_2[31]
   #st_transform(aarhus, crs(elevation))
 
+
+
+
+
 # Crop the elevation layer by aarhus
-elev_aarhus <- crop(_________,________)
+elev_aarhus <- crop(elevation, aarhus)
 
 # Plot
 plot(elev_aarhus)
-plot(_________(aarhus), col = "white", add = TRUE)
+plot(st_geometry(aarhus), col = "white", add = TRUE) # correct?
+
+
 ```
+
+
+
 
 ## Instructions II - Mask raster by Aarhus municipality
 
@@ -126,7 +171,7 @@ plot(_________(aarhus), col = "white", add = TRUE)
 
 ```{r plot-elevation, eval=FALSE}
 # Mask the elev_aarhus layer with aarhus and save as elev_aarhus_mask
-elev_aarhus_mask <- mask(_________,_____________)
+elev_aarhus_mask <- mask(elev_aarhus,aarhus)
 
 # Plot the elev_aarhus_mask -- this is a raster!
 plot(elev_aarhus_mask)
@@ -159,13 +204,16 @@ In the `elevation` grid in your data/ folder (`DNK_msk_alt.grd`), the values are
 library(raster)
 elev <- raster("../data/DNK_msk_alt.grd")
 
+
 # For sea rise: reclassify with 3m threshold and mask
 
 # Set up the matrix [from, to, becomes] - for sea areas or sea rise
-rcl_searise <- cbind(-Inf, ____, NA)
+rcl_searise <- cbind(-Inf, 3, NA) # from, to, what it should be; 3meters;   remove below 0
 
 # Apply the matrix
-elev_searise <- raster::reclassify(elev, ___=____________) # with raster
+elev_searise <- raster::reclassify(elev, rcl=rcl_searise) # with raster
+plot(elev_searise)
+
 plot(elev_searise)
 
 aarhus_searise <- terra::classify(elev_aarhus, rcl_searise) # with terra
@@ -191,23 +239,27 @@ Usefully, and you'll see this in a later analysis, you can feed `extract()` a fu
 
 ```{r extract, eval=FALSE}
 # Load buildings
-library(___________)
-buildings <- _______________("../data/mystery/a_bbr_1990.parquet")
+library(sfarrow)
+buildings <- st_read_parquet("../mystery/a_bbr_1990.parquet")
 
 # Check if you need to transform to match raster CRS
 plot(elev_aarhus_mask)
-all.equal(_____(buildings), ______(elev_aarhus_mask))
+all.equal(st_crs(buildings), crs(elev_aarhus_mask)) # compatible, but not the exact same
 
-buildings <- st_transform(buildings, ____________________)
+# buildings <- st_transform(buildings, crs = xx) # not needed
 
 # Extract the elevation values at the building locations 
-buildings$elev <- terra::extract(elev_aarhus_mask, buildings)________
+buildings$elev <- terra::extract(elev_aarhus_mask, buildings)$srtm_39_01 # OR use [,2]
 
 # Look at the buildings and extraction results
-plot(buildings["elev"]); plot(buildings %>% filter(elev < 3) %>% st_geometry(), add = T)
+plot(buildings["elev"])
+plot(buildings %>% filter(elev < 3) %>% st_geometry(), add = T)
 
 # Identify flooded buildings
 flooded_buildings <- buildings[buildings$elev <3, ]
+
+mapview(flooded_buildings)
+
 ```
 
 Great! `terra::extract()` is a very useful tool. It can be used with polygons as well as points and lines, and the result can be written out as a separate vector or added to an existing object as a column. 
@@ -272,11 +324,12 @@ What you will do in this exercise is: perform viewshed from hypothetical cell to
 elev_a25832 <- project(elev_aarhus_mask, "EPSG:25832")
 
 # Perform viewshed for one skyscraper
-viewshed_current <- terra::viewshed(elev_a25832, st_coordinates(skyscrapers_sf[1, ]))
+viewshed_current <- terra::viewshed(elev_a25832, st_coordinates(skyscrapers_sf[1, ]), observer = 50) # OBSERVER = how high up; not part of the skycraper data here, thus raw number is used here
 
 
 # Overlay or compare
-plot(viewshed_current)
+plot(viewshed_current); plot(st_geometry(skyscrapers_sf[1,]), pch = 19, cex = 1, col = "cyan", add = T) # true = visible  areas from each of the skyscrapers; use sum + resolution of cells to indicate which building can see a bigger area
+
 ```
 
 Congratulations! You've now learned to perform viewshed analysis, useful for visibility and coverage studies.

@@ -8,8 +8,18 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-library(knitr)
-library(rmdformats)
+
+pacman::p_load(knitr,
+               bookdown,
+               rmdformats,
+               geosphere,
+               opencage,
+               mapboxapi,
+               leaflet,
+               terra,
+               viridis,
+               tidyverse,
+               geodata)
 
 ## Global options
 options(max.print="75")
@@ -59,15 +69,12 @@ Raster data can be very big depending on the extent and resolution (grid cell si
 * Use the `hist()` function to create a quick histogram of the elevation values. Note any problematic values like -9999 (sea areas).
 
 ```{r access-raster, echo=TRUE, eval=FALSE}
-# libraries
-___(terra)
-___(geodata)
 
 # Read in the elevation layer (centered on Aarhus)
 elevation <- ___("../data/DNK_msk_alt.grd")
 
 # Check if the data is in memory
-___(___)
+inMemory(elevation)
 
 # Use head() to peak at the first few records
 ___(___)
