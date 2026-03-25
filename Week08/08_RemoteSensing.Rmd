@@ -7,8 +7,38 @@ output:
     highlight: kate
 ---
 ```{r setup, include=FALSE}
-library(knitr)
-library(rmdformats)
+
+
+pacman::p_load(knitr,
+               bookdown,
+               rmdformats,
+               geosphere,
+               opencage,
+               mapboxapi,
+               leaflet,
+               terra,
+               viridis,
+               tidyverse,
+               geodata,
+               raster,
+               rasterVis,
+               sfarrow,
+               leaflet,
+               mapview,
+               lattice,
+               latticeExtra,
+               RColorBrewer,
+               rgl,  # macs might need another prerequisite
+               landsat,
+               itcSegment,
+               RStoolbox,
+               rasterVis,
+               remotes)
+
+
+#install.packages("rgl")
+#remotes::install_github("dmurdoch/rgl")
+
 
 ## Global options
 options(max.print="75")
@@ -20,6 +50,7 @@ opts_chunk$set(echo=TRUE,
                message=FALSE,
                warning=FALSE)
 opts_knit$set(width=75)
+
 ```
 
 # Working with satellite imagery in R
@@ -38,13 +69,7 @@ Start by installing the required packages first.
 `rasterVis` and `RColoBrewer` are used for visualisation of rasters, `lattice` and `latticeExtra` for extra graphical utilities, while `landsat` provides the imagery samples and `rgl` allows for 3D visualisation. 
 
 ```{r packages}
-library(lattice)
-library(latticeExtra)
-library(RColorBrewer)
-library(rasterVis)
-library(rgl)  # macs might need another prerequisite
-library(landsat)
-library(terra)
+# done above
 ```
 
 # Task 2: Pre-processing of Landsat datasets 
@@ -63,10 +88,10 @@ The images are in the `SpatialGridDataFrame` format and need to be converted to 
 data(nov3)
 plot(nov3)
 
-data(nov4)
+data(nov4) # infrared
 plot(nov4)
 
-data(nov7)
+data(nov7) # near-infrared
 plot(nov7)
 ```
 
@@ -90,8 +115,9 @@ If you have the `raster` library and don't see the `plot3D()` function working, 
 ```{r 3D, eval = FALSE}
 library(raster)
 library(landsat)
-rglwidget()
-plot3D(dem, rev=T, zfac=1)
+library(rasterVis)
+#rglwidget()
+plot3D(dem, rev=T, zfac=1) # good for visualisation; little for any analysis
 
 ```
  
@@ -114,12 +140,14 @@ j4<-rast(july4) # near-infrared
 plot(j1)
 plot(j4)
 hist(j1, main="Band 1 - Blue of Landsat")	
-boxplot(j1, main="Band 1 - Blue of Landsat")		
+boxplot(j1, main="Band 1 - Blue of Landsat")
 
 data(nov1)
 plot(nov1)
 n1 <- rast(nov1)
 hist(n1)
+
+# if comparing histograms, then equalise histograms between observation times (e.g., if one is from june and another from november)
 
 ```
 
@@ -322,7 +350,7 @@ To get the segmentation going you will need the `terra` and `itcSegment` package
 library(terra)
 library(itcSegment)
 
-forest <- rast("../data/imgData.tif")
+forest <- rast("../data/Sciencedata/imgData.tif")
 
 plot(forest)
 
