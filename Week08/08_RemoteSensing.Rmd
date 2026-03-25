@@ -496,6 +496,7 @@ sc <- superClass(a, trainData = train, responseCol = "Type",
 
 # print model performance and confusion matrix
 sc$modelFit
+
 ```
 
 
