@@ -88,10 +88,10 @@ The images are in the `SpatialGridDataFrame` format and need to be converted to 
 data(nov3)
 plot(nov3)
 
-data(nov4) # infrared
+data(nov4) # near-infrared
 plot(nov4)
 
-data(nov7) # near-infrared
+data(nov7) # infrared
 plot(nov7)
 ```
 
@@ -116,7 +116,7 @@ If you have the `raster` library and don't see the `plot3D()` function working, 
 library(raster)
 library(landsat)
 library(rasterVis)
-#rglwidget()
+#rglwidget() # meant to aid rmd conversion to html
 plot3D(dem, rev=T, zfac=1) # good for visualisation; little for any analysis
 
 ```
@@ -169,8 +169,8 @@ splom(myCIR, varname.cex = 1) # scatter plot matrix
 
 
 ## better
-plotRGB(myRGB, stretch = "hist")
-plotRGB(myCIR,  stretch = "hist")
+plotRGB(myRGB, stretch = "hist") # strech linearly 'lin' or histogram 'hist'
+plotRGB(myCIR,  stretch = "hist") # false colour image
 ```
 
 
@@ -181,6 +181,9 @@ First, let's use histogram stretch
 ## different stretches - here histogram based
 plotRGB(myRGB, stretch="hist") 
 plotRGB(myCIR, stretch="hist")
+
+
+# if used for analyse mask away the clouds and cloud shadows
 ```
 
 Next, let's try linear stretch
@@ -237,8 +240,10 @@ names(myCIR) <- c("NIR", "Red", "Green", "Blue")
 library(RStoolbox)
 library(ggplot2)
 
-cldmsk    <- cloudMask(myCIR, blue = 4, tir = 1) 
-ggR(cldmsk, 2, geom_raster = TRUE) # geom_raster plots faster, 2 indicates the mask
+cldmsk    <- cloudMask(myCIR, blue = 4, tir = 1) # could mask function
+ggR(cldmsk, 2, geom_raster = TRUE) # geom_raster plots faster, 2 indicates the MASK
+
+# but the colour for the cloud shadows seem too much like some of the meaningful values on the map, thus we will just subtrct the clouds and keep the shadows
 ```
 
 ```{r cloud-mask-plot}
@@ -249,12 +254,12 @@ cldmsk_final <- cloudMask(cldmsk, threshold = 0.1, buffer = 5)
 library(ggplot2)
 ggRGB(myCIR, stretch = "lin") +
   ggR(cldmsk_final[[1]], ggLayer = TRUE, forceCat = TRUE, geom_raster = TRUE) +
-  scale_fill_manual(values = c("yellow"), na.value = NA)
+  scale_fill_manual(values = c("yellow"), na.value = NA)  # everything below threshold is said to be a cloud; 5 points buffer
 ```
 
 # Task 7: Create new information from satellite imagery: NDVI
 
-Let us calculate the Normalized Difference Vegetation Index (NDVI) and see where the vegetation grows most in our Landsat image:
+Let us calculate the _Normalized Difference Vegetation Index_ (NDVI) and see where the vegetation grows most in our Landsat image:
 Remember the formula for NDVI is: (NIR - RED) / (NIR + RED)
 
 ```{r ndvi}
@@ -266,7 +271,7 @@ ndvi <-  (n4 - n3) / (n4 + n3)
 ndvi
 plot(ndvi)
 
-# uncomment and run in 3D
+# uncomment and run in 3D -> the plot seems better
 plot3D(dem, drape = raster(ndvi), zfac = 1.5)
 
 ### remove values below zero
@@ -291,9 +296,11 @@ par(mfrow=c(1,2))
 plot(savi, main="SAVI"); plot(ndvi, main="NDVI")
 par(mfrow=c(1,1))
 
+
+# the lighter the colour, the healtier the vegetation in november; likely the watered plants in people's forests
 ```
 
-# Task 9: Unsupervised Classification with k-means
+# Task 9: Unsupervised Classification with k-means (clustering)
 
 We would like to isolate and better see the clusters of growth within our image. We will run kmeans function on a composite image in order to cluster data based on similarity or similar groups!
 ```{r prep-kmeans}
@@ -303,10 +310,11 @@ data(nov1)
 n2 <- rast(nov2)
 n1 <- rast(nov1)
 ndvi
-which(is.na(as.data.frame(ndvi))) # should be 0, rerun the ndvi creation if not.
+#     which(is.na(as.data.frame(ndvi))) # should be 0, rerun the ndvi creation if not.
 
 # create a new composite brick out of the available data
 myNewBrick <- c(n4,n3,n2,n1,ndvi)
+names(myNewBrick) <- c("NIR", "RED", "GREEN", "BLUE", "NDVI")
 splom(myNewBrick)
 plot(myNewBrick)
 
@@ -325,7 +333,7 @@ str(cluster_ICE)
 # cluster_ICE <- cluster::clara(ICE_df, 4) ### another option, clara, with 4 clusters
 
 # convert cluster information into a raster for plotting
-clusters <- rast(myNewBrick)   ## create an empty raster with same extent than ICE
+clusters <- rast(myNewBrick)   ## create an empty raster with same extent/shape than ICE
 clusters <- setValues(clusters, cluster_ICE$cluster) # convert cluster values into raster
 clusters
 plot(clusters)
@@ -350,13 +358,13 @@ To get the segmentation going you will need the `terra` and `itcSegment` package
 library(terra)
 library(itcSegment)
 
-forest <- rast("../data/Sciencedata/imgData.tif")
+forest <- terra::rast("../data/Sciencedata/imgData.tif")
 
 plot(forest)
 
 # Use the itcIMG() function to detect and grow the individual crowns
 ?itcIMG()
-se <-itcIMG(forest, epsg=32632)
+se <- itcIMG(forest, epsg=32632)
 summary(se)
 
 # What is the product of the function? Is it a raster or vector?
@@ -395,7 +403,7 @@ And how many tree crowns have you just detected in how big an area? What is the 
 # Task 12: a more demanding segmentation example with a bigger LIDAR image!
 And because we have it in the data/ folder, try with this larger example.
 ```{r itcs-big, eval=FALSE}
-r <- rast("../data/myDem_subset.tif")
+r <- rast("../data/Sciencedata/myDem_subset.tif") # TRY RASTER instead
 r
 plot(r)
 ?itcIMG()
@@ -446,7 +454,7 @@ mapview(r)
 # Task 13: Classify green areas and find the tree crowns in downtown Aarhus
 
 ```{r uclassify-aarhus}
-a <- rast("../data/Aarhus_1m.TIF")
+a <- rast("../data/Sciencedata/Aarhus_1m.TIF")
 plotRGB(a)
 
 library(RStoolbox)
@@ -464,7 +472,7 @@ ggR(uc$map, geom_raster = T, forceCat = T) +
 ```{r sclassify-aarhus}
 library(sf)
 crs(a)
-train <- read_sf("../data/train_aarhus.geojson") %>% 
+train <- read_sf("../data/Sciencedata/train_aarhus.geojson") %>% 
   st_transform(crs = crs(a))
 st_crs(train)
 unique(train$Type)
@@ -482,6 +490,9 @@ ggRGB(a, r = 3, g = 2, b=1, stretch = "lin") +
 # fit random forest (splitting training into 70\% training data, 30\% validation data)
 sc <- superClass(a, trainData = train, responseCol = "Type",
                  model = "rf", tuneLength = 1, trainPartition = 0.7)
+
+
+?superClass
 
 # print model performance and confusion matrix
 sc$modelFit
