@@ -364,7 +364,7 @@ plot(forest)
 
 # Use the itcIMG() function to detect and grow the individual crowns
 ?itcIMG()
-se <- itcIMG(forest, epsg=32632)
+se <- itcIMG(forest, epsg=32632) # try this out: https://brightspace.au.dk/content/enforced/201062-LR54398/itcSegment_troubleshooting_light.html
 summary(se)
 
 # What is the product of the function? Is it a raster or vector?
