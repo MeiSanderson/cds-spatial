@@ -8,8 +8,10 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-library(knitr)
-library(rmdformats)
+
+pacman::p_load(knitr, rmdformats, sf, tidyverse, tmap, spatstat, sfarrow, mapview)
+pacman::p_load(spatstat)
+
 
 ## Global options
 options(max.print="75")
@@ -23,14 +25,6 @@ opts_chunk$set(echo=TRUE,
 opts_knit$set(width=75)
 ```
 
-```{r libraries, include=FALSE}
-library(sf)
-library(tidyverse)
-library(tmap)
-library(spatstat)
-library(sfarrow)
-library(mapview)
-```
 
 # Background
 
@@ -44,13 +38,22 @@ Denmark built a network of **176 civil defence shelters** in Aarhus during the C
 
 ```{r load-shelters, eval=FALSE}
 # Load shelter point data (176 civil defence shelters, WGS84)
-shelters <- st_read("../data/sheltersAarhus.geojson")
+shelters <- st_read("../data/Sciencedata/sheltersAarhus.geojson")
+districs <- st_read("../mystery/districts2023.geojson")
 
 # How many shelters are there?
 nrow(shelters)
 
 # Quick interactive overview
 mapview(shelters)
+
+
+
+# assess districs
+head(districs)
+names(districs)
+districs$prog_distrikt_nr
+
 ```
 
 # Task 2: Create spatial frames and compute equity metric
@@ -60,17 +63,17 @@ mapview(shelters)
 shelters_utm <- st_transform(shelters, crs = 25832)
 
 # --- Frame A: 250 m square grid ---
-grid <- st_make_grid(________, cellsize = ________, square = TRUE) %>%
+grid <- st_make_grid(shelters_utm, cellsize = 250, square = TRUE) %>%
   st_sf(frame = "grid", cell_id = seq_along(.), geometry = .)
 
 # --- Frame B: 500 m hex grid ---
-grid_hex <- st_make_grid(________, cellsize = ________, square = FALSE) %>%
+grid_hex <- st_make_grid(shelters_utm, cellsize = 500, square = FALSE) %>%
   st_sf(frame = "hex", cell_id = seq_along(.), geometry = .)
 
 # --- Frame C: Current urban districts ---
-districts <- st_read(________) %>%
+districts <- districs %>%
   st_transform(crs = 25832) %>%
-  rename(cell_id = ________) %>%   # it's good to have an id; check names(districts) to find the right field
+  rename(cell_id = prog_distrikt_nr) %>%   # it's good to have an id; check names(districts) to find the right field
   mutate(frame = "historic") %>%
   st_filter(shelters_utm, .join = "intersects")
 ```
@@ -84,12 +87,12 @@ count_shelters <- function(frame_sf) {
     mutate(n_shelters = lengths(st_contains(frame_sf, shelters_utm)))
 }
 
-grid_count <- count_shelters(________)
-hex_count  <- count_shelters(________)
-hist_count <- count_shelters(________)
+grid_count <- count_shelters(grid)
+hex_count  <- count_shelters(grid_hex)
+hist_count <- count_shelters(districts)
 
 # --- Load BBR population data ---
-bbr_sf <- sfarrow::st_read_parquet(________) %>%
+bbr_sf <- sfarrow::st_read_parquet("../mystery/a_bbr_1990.parquet") %>%
   st_transform(crs = 25832)
 
 # --- Aggregate est_pop per spatial unit ---
@@ -99,9 +102,9 @@ agg_pop <- function(frame_sf) {
     summarise(pop = sum(est_pop, na.rm = TRUE), .groups = "drop")
 }
 
-grid_pop <- agg_pop(________)
-hex_pop  <- agg_pop(________)
-hist_pop <- agg_pop(________)
+grid_pop <- agg_pop(grid)
+hex_pop  <- agg_pop(grid_hex)
+hist_pop <- agg_pop(districts)
 
 mapview(grid_pop, zcol = "pop")
 mapview(hex_pop,  zcol = "pop")
@@ -126,8 +129,8 @@ tmap_mode("view")
 
 make_map <- function(eq_sf, title) {
   tm_shape(eq_sf %>% filter(pop > 0, is.finite(shelters_per_100))) +
-    tm_polygons("shelters_per_100",
-                style = "pretty",
+    tm_polygons("n_shelters",
+                style = "jenks",
                 fill.legend = tm_legend(title = "Shelters\nper 100"),
                 palette = "YlOrRd") +
   tm_shape(shelters_utm) +
@@ -135,9 +138,9 @@ make_map <- function(eq_sf, title) {
     tm_title(title)
 }
 
-m_grid <- make_map(________, "250 m grid")
-m_hex  <- make_map(________, "500 m hex")
-m_hist <- make_map(________, "Urban districts")
+m_grid <- make_map(eq_sf = grid_eq, title = "250 m grid")
+m_hex  <- make_map(hex_eq, "500 m hex")
+m_hist <- make_map(hist_eq, "Urban districts")
 
 tmap_arrange(m_grid, m_hex, m_hist, ncol = 3)
 
@@ -154,7 +157,7 @@ What other containers would you suggest we use to bin the shelters more equitabl
 
 ```{r shelters-ppp, eval=FALSE}
 # Project shelters to UTM zone 32N (EPSG:25832) — ppp requires projected CRS
-shelters_utm <- st_transform(________, crs = 25832)
+shelters_utm <- st_transform(shelters, crs = 25832)
 
 # Extract coordinates
 coords <- st_coordinates(shelters_utm)
@@ -174,7 +177,7 @@ shelters_ppp
 
 ```{r quadrat-test, eval=FALSE}
 # Quadrat test: divide window into 5x5 grid, compare observed counts to CSR
-qt <- quadrat.test(________, nx = 5)
+qt <- quadrat.test(shelters_ppp, nx = 5)
 qt
 plot(qt, main = "Quadrat test — Aarhus shelters")
 
@@ -186,11 +189,11 @@ plot(qt, main = "Quadrat test — Aarhus shelters")
 
 ```{r nnd-gest, eval=FALSE}
 # Mean nearest-neighbour distance (in metres, UTM projection)
-mean_nnd <- mean(nndist(________))
+mean_nnd <- mean(nndist(shelters_ppp))
 cat("Mean nearest-neighbour distance:", round(mean_nnd), "m\n")
 
 # G function with simulation envelope (99 simulations)
-env_g <- envelope(________, Gest, nsim = 99)
+env_g <- envelope(shelters_ppp, Gest, nsim = 99)
 plot(env_g, main = "G function — Aarhus shelters")
 
 # Interpretation: does the G curve rise steeply at short distances
@@ -202,7 +205,7 @@ plot(env_g, main = "G function — Aarhus shelters")
 
 ```{r kest, eval=FALSE}
 # K function with simulation envelope (border correction, 99 simulations)
-env_k <- envelope(________, Kest, nsim = 99)
+env_k <- envelope(shelters_ppp, Kest, nsim = 99)
 
 # Linearised plot: subtract Poisson expectation (stored in 'theo' column)
 plot(env_k, . - theo ~ r,
@@ -224,7 +227,7 @@ Are arson fires and liquor law violations spatially attracted to each other in C
 
 ```{r chicago-challenge, eval=FALSE}
 # Load raw Chicago crime data (268,505 rows)
-crimes <- read_csv(________)
+crimes <- read_csv("../Week01/data/ChicagoCrimes2017.csv")
 
 # Filter to two crime types
 # Note: column is "Primary Type" (mixed case) — backtick quoting required
