@@ -8,8 +8,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-library(knitr)
-library(rmdformats)
+pacman::p_load(knitr, rmdformats)
 
 ## Global options
 options(max.print="75")
@@ -24,11 +23,10 @@ opts_knit$set(width=75)
 ```
 
 ```{r libraries, include=FALSE}
-library(sf)
-library(tidyverse)
-library(tmap)
-library(spdep)
-library(mapview)
+
+pacman::p_load(sf, tidyverse, tmap, spdep, mapview, cartogram)
+
+
 ```
 
 # Background
@@ -48,7 +46,7 @@ Load the municipal boundary and historical election data `elections_sp.rds`, joi
 # elections_sp.rds is an sf object (CRS EPSG:32632, already projected)
 # Columns: NAME_2, Party, Y2011/Y2015/Y2019 (total votes),
 #          sum2011/2015/2019 (electorate), pct_vote2011/2015/2019 (fraction)
-elections <- readRDS("../data/________")
+elections <- readRDS("../data/Sciencedata/elections_sp.rds")
 
 # How many rows? How many distinct municipalities?
 nrow(elections)
@@ -60,8 +58,8 @@ unique(elections$Party)
 # Map the A.Socialdemokratiet fraction in 2015 to get oriented. 
 # Which function helps you find specific strings inside filter()?
 elections %>%
-  filter(_____("__", Party)) %>%    # Party starts with "A" = Socialdemokratiet
-  mapview(zcol = "________")        # e.g. pct_vote2015
+  filter(Party=='A. Socialdemokratiet') %>%
+  mapview(zcol = "pct_vote2015")        # e.g. pct_vote2015
 ```
 
 # Task 2: Explore political geography with tmap (~15 min)
@@ -75,12 +73,12 @@ library(tmap)
 # Filter to Danske Folkeparti (Party starts with "O") and
 # Socialdemokratiet (Party starts with "A")
 elections %>%
-  filter(_____("^A|^O", Party)) %>%
+  filter(grepl("^A|^O", Party)) %>%   # starts with A or O
   tm_shape() +
-  tm_facets(by = "________") +
-  tm_polygons("________",
+  tm_facets(by = "Party") +
+  tm_polygons("pct_vote2015",
               fill.legend = tm_legend(title = "Vote share 2015"),
-             position = tm_pos_out("right", "center")))
+             position = tm_pos_out("right", "center"))
 
 # What spatial pattern do you see for Danske Folkeparti?
 # Is there a north-south or urban-rural gradient?
@@ -95,11 +93,11 @@ Are neighbouring municipalities more similar in their Danske Folkeparti support 
 ```{r nb-contiguity, eval=FALSE}
 # elections_sp.rds is already projected (EPSG:32632)
 # Simplify boundaries slightly for faster computation /rendering
-mun_sm <- st_simplify(elections %>% filter(______) ,  # filter so you only get 99 shapes 
-                      dTolerance = _____)  # put in a number between 100-250 and observe the difference
+mun_sm <- st_simplify(elections %>% filter(grepl("^A", Party)) ,  # filter so you only get fewer shapes 
+                      dTolerance = 100)  # put in a number between 100-250 and observe the difference
 
 # Create queen-contiguity neighbour list
-nb <- poly2nb(________, queen = TRUE)
+nb <- poly2nb(st_geometry(mun_sm), queen = TRUE)
 nb
 
 # Get municipality centroids for visualisation
@@ -114,6 +112,7 @@ title("Queen contiguity neighbours")
 ## Moran's I test
 
 ```{r moran-df, eval=FALSE}
+
 # Subset to Danske Folkeparti
 DF <- elections %>% filter(grepl("^O", Party))
 
@@ -121,12 +120,12 @@ DF <- elections %>% filter(grepl("^O", Party))
 lw <- nb2listw(nb, style = "W", zero.policy = TRUE)
 
 # Moran's I test (theoretical distribution)
-moran.test(DF$________,      # pct_vote2015
+moran.test(DF$pct_vote2015,      # pct_vote2015
            lw,
            zero.policy = TRUE)
 
 # Monte Carlo permutation test (more reliable p-value)
-moran.mc(DF$________,
+moran.mc(DF$pct_vote2015,
          lw,
          nsim = 999,
          zero.policy = TRUE)
@@ -145,7 +144,7 @@ Does the result depend on how we define neighbours? Test with a 50 km distance b
 mun_centers_sf <- st_centroid(mun_sm$geometry, of_largest_polygon = TRUE)
 
 # Neighbours within 0–50 km
-nb_50 <- dnearneigh(mun_centers_sf, 0, 50000)
+nb_50 <- dnearneigh(mun_centers_sf, 0, 50000)  # distance neighbourhood
 
 # Visualise
 plot(mun_sm$geometry)
@@ -153,12 +152,19 @@ plot(nb_50, mun_centers_sf, col = "blue", add = TRUE)
 title("Neighbours within 50 km")
 
 # Row-standardised weights
-lw_50 <- nb2listw(nb_50, style = "W", zero.policy = TRUE)
+lw_50 <- nb2listw(nb_50, style = "W", zero.policy = TRUE) # assigning each neighbour the same weight
 
 # Moran's I with distance-band neighbours
-moran.test(DF$________,
+moran.test(DF$pct_vote2015,
            lw_50,
            zero.policy = TRUE)
+
+
+# Monte Carlo permutation test (more reliable p-value)
+moran.mc(DF$pct_vote2015,
+         lw_50,
+         zero.policy = TRUE)
+
 
 # Does the conclusion change? Why might island municipalities behave differently
 # under contiguity vs. distance-band definitions?
@@ -182,11 +188,11 @@ DF <- elections %>%
   st_transform(crs = 25832)
 
 # Create cartogram scaled to total electorate in 2015
-DF_carto <- cartogram_cont(DF, weight = "________", itermax = 15)
+DF_carto <- cartogram_cont(DF, weight = "sum2015", itermax = 15)
 # weight = quoted column name, e.g. "sum2015" for total electorate
 
 # Plot the cartogram
-plot(DF_carto["________"],
+plot(DF_carto["sum2015"],
      main = "Cartogram: Danske Folkeparti 2015\n(area scaled to total electorate)")
 
 # Compare: does the spatial pattern look different from the regular map?
