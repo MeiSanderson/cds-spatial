@@ -8,8 +8,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-library(knitr)
-library(rmdformats)
+pacman::p_load(knitr, rmdformats)
 
 ## Global options
 options(max.print="75")
@@ -24,9 +23,8 @@ opts_knit$set(width=75)
 ```
 
 ```{r libraries, include=FALSE}
-library(sf)
-library(tidyverse)
-library(gstat)
+pacman::p_load(sf, tidyverse, gstat, sp, automap)
+
 ```
 
 # Background
@@ -41,7 +39,7 @@ OM values range from 0 (nutrient-poor) to 9 (nutrient-rich). Ancient village cen
 
 ```{r load-data, eval=FALSE}
 # Load geochemical survey data
-kaz_geo <- read_csv("../data/KAZ_geo.csv")
+kaz_geo <- read_csv("../data/Sciencedata/KAZ_geo.csv")
 
 # Spatialise: coordinates are Longitude/Latitude (WGS84)
 kaz_geo <- kaz_geo %>%
@@ -53,7 +51,7 @@ kaz_geo$X <- st_coordinates(kaz_geo)[, 1]
 kaz_geo$Y <- st_coordinates(kaz_geo)[, 2]
 
 # Load ancient village sites
-kaz_sites <- st_read("../data/KAZ_scatterpoints.shp") %>%
+kaz_sites <- st_read("../data/Sciencedata/KAZ_scatterpoints.shp") %>%
   st_transform(crs = 32635)
 
 # Quick look at OM distribution

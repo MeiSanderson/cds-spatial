@@ -8,8 +8,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-library(knitr)
-library(rmdformats)
+pacman::p_load(knitr, rmdformats)
 
 ## Global options
 options(max.print="75")
@@ -24,11 +23,7 @@ opts_knit$set(width=75)
 ```
 
 ```{r libraries, include=FALSE}
-library(sf)
-library(terra)
-library(tidyverse)
-library(gstat)
-library(tmap)
+pacman::p_load(sf, tidyverse, gstat, sp, automap, tmap)
 ```
 
 # Background
@@ -52,7 +47,7 @@ If there are no nitrates.csv in your data/ folder, download it from this [scienc
 
 ```{r nitrate-load, eval=FALSE}
 # Load the CSV and rename the awkward Danish column names
-nitrate <- read_csv("../data/nitrate.csv") %>% as.data.frame()
+nitrate <- read_csv("../data/Sciencedata/nitrate.csv") %>% as.data.frame()
 
 names(nitrate)[names(nitrate) == "Seneste"]       <- "measurement_date"
 names(nitrate)[names(nitrate) == "Seneste mg/l"]  <- "nitrate_concentration"
@@ -71,10 +66,10 @@ nitrate <- nitrate %>%
 
 ```{r nitrate-sf, eval=FALSE}
 # Turn the data frame into an sf object using the WKT column
-nitrate <- st_as_sf(nitrate, wkt = __________)
+nitrate <- st_as_sf(nitrate, wkt = 'WKT') # https://rdrr.io/cran/sf/man/st_as_sf.html
 
 # The CSV has no CRS metadata — assign EPSG  (which one 25832, 32632, or 4326?)
-nitrate <- st_set_crs(nitrate, value = _________)
+nitrate <- st_set_crs(nitrate, value = 25832) # not entirely sure about the chosen EPSG: I choose the European over the 2D Mercator Projection, but due to the high numbers I def did not go for the 3D (no degrees; EPSG 4326)
 
 # Verify
 st_crs(nitrate)[1]
@@ -116,10 +111,10 @@ For this exercise we use the **2012-2022 snapshot** as a representative organic 
 
 ```{r load-fields, eval=FALSE}
 # All registered fields in Denmark (2022)
-all_fields <- st_read("../data/Markblokke_2022.shp")
+all_fields <- st_read("../data/Sciencedata/data/Markblokke_2022.shp")
 
 # Organic fields collated through 2022 (but single year is enough for the method if you find that easier)
-organic_fields <- readRDS("../data/oekologiske_arealer.rds")
+organic_fields <- st_read("../data/Sciencedata/data/oekologiske_arealer_2012.shp")
 
 
 # Conventional = all_fields that do NOT intersect any organic polygon
@@ -161,6 +156,9 @@ plot(vgm_emp, model = v_model, main = "Fitted variogram")
 
 *At roughly what distance does spatial correlation die off? Does a 40 km range feel sensible for a country-scale process?*
 
+-> yes around 40km it seems to reach a still
+
+
 ## Build a prediction grid and krige
 
 ```{r krige-grid, eval=FALSE}
@@ -179,10 +177,10 @@ nitrate_grid <- krige(nitrate_concentration ~ Easting + Northing,
 # Crop to Denmark and map
 
 # First create DK out of your regional (not municipal) polygons
-DK <- readRDS("../data/gadm_______________") %>%
+DK <- readRDS("../data/Sciencedata/gadm36_DNK_1_sp.rds") %>%
   st_as_sf() %>% 
   st_set_crs(4326) %>%
-  _________ %>%  # what do you need to do to get the country' border?
+  st_union() %>%  # what do you need to do to get the country' border?
   st_transform(25832)
 
 nitrate_dk <- nitrate_grid[DK, ]
@@ -224,6 +222,10 @@ summary(lm_model)
 ```
 
 *Interpret the t-test and the regression coefficient. Are organic fields associated with lower predicted nitrate? Is the difference large enough to matter agronomically?*
+-> not statistically different from 0, so no significant effect / association / difference
+
+
+
 
 ---
 
